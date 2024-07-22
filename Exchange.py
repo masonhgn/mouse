@@ -1,29 +1,51 @@
-from OrderBook import OrderBook
+from OrderBook import OrderBook, Order
+from Client import Client
+import pandas as pd
 
 class Exchange:
-
     def __init__(self):
+        self.clients = {}  # Dictionary to hold client objects
+        self.create_orderbooks_from_file('tickers.csv')
 
-        self.tickers = [
-            'A',
-            'B',
-            'C',
-        ]
-        self.create_orderbooks_from_file('tickers.txt')
-            
+    def register_client(self, client_id, balance):
+        self.clients[client_id] = Client(client_id, balance)
 
-    def create_orderbooks_from_file(filename: str) -> dict:
+    def print_order_book(self, ticker) -> None:
+        self.orderbooks[ticker].print()
+
+    def create_orderbooks_from_file(self, filename: str) -> None:
         orderbooks = {}
-        
-        with open(filename, 'r') as file:
-            for line in file:
-                ticker, price = line.strip().split()
-                price = float(price)
-                orderbooks[ticker] = OrderBook(ticker, price)
-        
+
+        df = pd.read_csv(filename)
+        for _, row in df.iterrows():
+            ticker = row['ticker']
+            price = row['price']
+            bid = row['bid']
+            ask = row['ask']
+            volume = row['volume']
+            orderbooks[ticker] = OrderBook(ticker, price, bid, ask, volume)
+
         self.orderbooks = orderbooks
 
+    def save_orderbooks_to_file(self, filename: str) -> None:
+        data = []
 
-    def submit_order(self, )
+        for ticker, orderbook in self.orderbooks.items():
+            data.append({
+                'ticker': ticker,
+                'price': orderbook.price,
+                'bid': orderbook.bid,
+                'ask': orderbook.ask,
+                'volume': orderbook.volume,
+            })
 
-    
+        df = pd.DataFrame(data)
+        df.to_csv(filename, index=False)
+
+    def submit_order(self, client_id, ticker, side, type, quantity, price=None) -> None:
+        order = Order(client_id, side, type, ticker, quantity, price)
+        if ticker in self.orderbooks:
+            self.orderbooks[ticker].add_order(order)
+            self.orderbooks[ticker].match_orders(self.clients)
+        else:
+            print(f"Ticker {ticker} not found in the order books.")

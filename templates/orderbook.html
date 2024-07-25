@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Book</title>
+    <script>
+        async function fetchOrderBook(ticker) {
+            const response = await fetch(`/order_book/${ticker}`);
+            const data = await response.json();
+            
+            const buyOrdersDiv = document.getElementById('buy-orders');
+            const sellOrdersDiv = document.getElementById('sell-orders');
+            
+            buyOrdersDiv.innerHTML = '<h2>Buy Orders</h2>';
+            sellOrdersDiv.innerHTML = '<h2>Sell Orders</h2>';
+            
+            data.buy_orders.forEach(order => {
+                const p = document.createElement('p');
+                p.textContent = `Client: ${order.client_id}, Quantity: ${order.quantity}, Price: ${order.price}`;
+                buyOrdersDiv.appendChild(p);
+            });
+
+            data.sell_orders.forEach(order => {
+                const p = document.createElement('p');
+                p.textContent = `Client: ${order.client_id}, Quantity: ${order.quantity}, Price: ${order.price}`;
+                sellOrdersDiv.appendChild(p);
+            });
+        }
+
+        function startFetching(ticker) {
+            fetchOrderBook(ticker);
+            setInterval(() => fetchOrderBook(ticker), 1000); // Refresh every second
+        }
+    </script>
+</head>
+<body onload="startFetching('{{ ticker }}')">
+    <h1>Order Book for {{ ticker }}</h1>
+    <div id="buy-orders"></div>
+    <div id="sell-orders"></div>
+    <hr>
+    <h2>Submit Order</h2>
+    <form method="POST">
+        <label for="client_id">Client ID:</label>
+        <input type="text" id="client_id" name="client_id" required><br>
+        <label for="side">Side:</label>
+        <select id="side" name="side" required>
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+        </select><br>
+        <label for="type">Type:</label>
+        <select id="type" name="type" required>
+            <option value="limit">Limit</option>
+            <option value="market">Market</option>
+        </select><br>
+        <label for="quantity">Quantity:</label>
+        <input type="number" id="quantity" name="quantity" required><br>
+        <label for="price">Price:</label>
+        <input type="number" step="0.01" id="price" name="price"><br>
+        <button type="submit">Submit Order</button>
+    </form>
+</body>
+</html>

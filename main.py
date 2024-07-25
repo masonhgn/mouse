@@ -1,11 +1,17 @@
 from Exchange import Exchange
 import numpy as np
+from Client import Client
 if __name__ == "__main__":
     
     exchange = Exchange()
     
-    for i in range(100):
-        exchange.submit_order('A','buy','limit',np.random.randint(1,100),np.random.uniform(58,60))
-        exchange.submit_order('A','sell','limit',np.random.randint(1,100),np.random.uniform(58,60))
+  
+    a = exchange.register_client(100000)
+    b = exchange.register_client(100000)
+
+
+    exchange.submit_order(a,'buy','limit',50,'A',40)
+    exchange.submit_order(b,'sell','limit',50,'A',35)
     
-    exchange.print_order_book('A')
+
+    

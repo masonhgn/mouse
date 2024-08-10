@@ -1,61 +1,133 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Order Book</title>
-    <script>
-        async function fetchOrderBook(ticker) {
-            const response = await fetch(`/order_book/${ticker}`);
-            const data = await response.json();
-            
-            const buyOrdersDiv = document.getElementById('buy-orders');
-            const sellOrdersDiv = document.getElementById('sell-orders');
-            
-            buyOrdersDiv.innerHTML = '<h2>Buy Orders</h2>';
-            sellOrdersDiv.innerHTML = '<h2>Sell Orders</h2>';
-            
-            data.buy_orders.forEach(order => {
-                const p = document.createElement('p');
-                p.textContent = `Client: ${order.client_id}, Quantity: ${order.quantity}, Price: ${order.price}`;
-                buyOrdersDiv.appendChild(p);
-            });
+{% extends "base.html" %}
 
-            data.sell_orders.forEach(order => {
-                const p = document.createElement('p');
-                p.textContent = `Client: ${order.client_id}, Quantity: ${order.quantity}, Price: ${order.price}`;
-                sellOrdersDiv.appendChild(p);
+{% block title %}Order Book - {{ ticker }}{% endblock %}
+
+{% block content %}
+<head>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let currentBuyOrders = [];
+        let currentSellOrders = [];
+
+        function fetchOrderBook(ticker) {
+            $.ajax({
+                url: `/order_book/${ticker}`,
+                method: 'GET',
+                success: function(data) {
+                    updateOrderBook(data);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching order book:', error);
+                    // Optionally show an error message in the UI
+                }
+            });
+        }
+
+        function updateOrderBook(data) {
+            // Check if buy orders have changed
+            if (JSON.stringify(currentBuyOrders) !== JSON.stringify(data.buy_orders)) {
+                currentBuyOrders = data.buy_orders;
+                updateTable('#buy-orders-table-body', currentBuyOrders);
+            }
+
+            // Check if sell orders have changed
+            if (JSON.stringify(currentSellOrders) !== JSON.stringify(data.sell_orders)) {
+                currentSellOrders = data.sell_orders;
+                updateTable('#sell-orders-table-body', currentSellOrders);
+            }
+        }
+
+        function updateTable(tableBodySelector, orders) {
+            const $tableBody = $(tableBodySelector);
+            $tableBody.empty();  // Clear the table body
+            orders.forEach(order => {
+                const row = `<tr><td>${order.client_id}</td><td>${order.quantity}</td><td>${order.price}</td></tr>`;
+                $tableBody.append(row);
             });
         }
 
         function startFetching(ticker) {
-            fetchOrderBook(ticker);
-            setInterval(() => fetchOrderBook(ticker), 1000); // Refresh every second
+            fetchOrderBook(ticker);  // Initial fetch
+            setInterval(() => fetchOrderBook(ticker), 1000);  // Fetch every second
+        }
+
+        function togglePriceField() {
+            const orderType = $('#type').val();
+            const priceField = $('#price-field');
+            priceField.toggle(orderType === 'limit');
         }
     </script>
 </head>
-<body onload="startFetching('{{ ticker }}')">
-    <h1>Order Book for {{ ticker }}</h1>
-    <div id="buy-orders"></div>
-    <div id="sell-orders"></div>
+<body onload="startFetching('{{ ticker }}'); togglePriceField();">
+    <h1 class="text-center">Order Book for {{ ticker }}</h1>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h2 class="text-center">Buy Orders</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">Client ID</th>
+                        <th scope="col">Quantity</th>
+                        <th scope="col">Price</th>
+                    </tr>
+                </thead>
+                <tbody id="buy-orders-table-body">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="col-md-6">
+            <h2 class="text-center">Sell Orders</h2>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th scope="col">Client ID</th>
+                        <th scope="col">Quantity</th>
+                        <th scope="col">Price</th>
+                    </tr>
+                </thead>
+                <tbody id="sell-orders-table-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <hr>
-    <h2>Submit Order</h2>
-    <form method="POST">
-        <label for="client_id">Client ID:</label>
-        <input type="text" id="client_id" name="client_id" required><br>
-        <label for="side">Side:</label>
-        <select id="side" name="side" required>
-            <option value="buy">Buy</option>
-            <option value="sell">Sell</option>
-        </select><br>
-        <label for="type">Type:</label>
-        <select id="type" name="type" required>
-            <option value="limit">Limit</option>
-            <option value="market">Market</option>
-        </select><br>
-        <label for="quantity">Quantity:</label>
-        <input type="number" id="quantity" name="quantity" required><br>
-        <label for="price">Price:</label>
-        <input type="number" step="0.01" id="price" name="price"><br>
-        <button type="submit">Submit Order</button>
+
+    <h2 class="text-center">Submit Order</h2>
+    <form method="POST" class="mx-auto" style="max-width: 600px;">
+        <input type="hidden" name="client_id" value="{{ current_user.id }}">  <!-- Automatically use the authenticated user's ID -->
+        
+        <div class="mb-3">
+            <label for="side" class="form-label">Side:</label>
+            <select id="side" name="side" class="form-select" required>
+                <option value="buy">Buy</option>
+                <option value="sell">Sell</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="type" class="form-label">Type:</label>
+            <select id="type" name="type" class="form-select" onchange="togglePriceField()" required>
+                <option value="limit">Limit</option>
+                <option value="market">Market</option>
+            </select>
+        </div>
+
+        <div class="mb-3" id="price-field">
+            <label for="price" class="form-label">Price:</label>
+            <input type="number" step="0.01" id="price" name="price" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="quantity" class="form-label">Quantity:</label>
+            <input type="number" id="quantity" name="quantity" class="form-control" required>
+        </div>
+
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary">Submit Order</button>
+        </div>
     </form>
 </body>
-</html>
+{% endblock %}

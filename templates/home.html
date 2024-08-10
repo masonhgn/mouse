@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Tickers{% endblock %}
+
+{% block content %}
+<h2 class="text-center">Tickers and Last Traded Prices</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th scope="col">Ticker</th>
+            <th scope="col">Last Traded Price</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ticker in tickers %}
+        <tr>
+            <td>{{ ticker['ticker'] }}</td>
+            <td>{{ ticker['price'] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

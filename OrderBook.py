@@ -2,10 +2,9 @@ import string
 import uuid
 
 
-
 class Order:
     def __init__(self, client_id, side, order_type, quantity, ticker, price=None):
-        self.id = str(uuid.uuid4())
+        self.id = str(uuid.uuid4())  # Generate a unique order ID
         self.client_id = client_id
         self.side = side
         self.type = order_type
@@ -14,7 +13,6 @@ class Order:
         self.ticker = ticker
         self.filled_quantity = 0
         self.executed = False
-
 
     
 

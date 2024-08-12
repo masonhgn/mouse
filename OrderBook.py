@@ -67,15 +67,14 @@ class OrderBook:
 
 
 
+
     def find_order(self, order_id, side):
         return self.order_lookup.get(order_id)
 
 
     def match_orders(self, clients):
-
         #while the orderbook is not empty
-        while self.orderbook['buy'] and self.orderbook['sell']:
-        
+        while len(self.orderbook['buy']) and len(self.orderbook['sell']):
             #get top two orders
             best_buy_id = self.orderbook['buy'][0]
             best_sell_id = self.orderbook['sell'][0]
@@ -90,13 +89,23 @@ class OrderBook:
 
             #if we've found matching orders, let's execute them to some extent
             if best_buy.price >= best_sell.price:
-                match_quantity = min(best_buy.quantity - best_buy.filled_quantity, best_sell.quantity - best_sell.filled_quantity)
+
+                #match as much quantity as both parties are willing to trade
+                match_quantity = min(best_buy.quantity, best_sell.quantity)
+
+                #get average price between the two for transaction price
                 transaction_price = round((best_buy.price + best_sell.price) / 2,2)
+
+                #this will set the price
                 self.last_traded_price = transaction_price
                 print('MATCH ' + self.ticker + ' at $' + str(transaction_price) + ' quantity=' + str(match_quantity))
+
+
                 #update the filled quantity of the orders
                 best_buy.filled_quantity += match_quantity
                 best_sell.filled_quantity += match_quantity
+                best_buy.quantity -= match_quantity
+                best_sell.quantity -= match_quantity
 
                 #fetch client portfolios
                 buy_client = clients[best_buy.client_id]
@@ -108,17 +117,23 @@ class OrderBook:
 
 
                 #if we've filled the entire order, we want to remove the order from the queue
-                if best_buy.filled_quantity == best_buy.quantity:
-
+                if best_buy.filled_quantity == best_buy.quantity or best_buy.quantity == 0:
+                    
                     self.orderbook['buy'].pop(0)
                     best_buy.executed = True
 
-                if best_sell.filled_quantity == best_sell.quantity:
-
+                if best_sell.filled_quantity == best_sell.quantity or best_sell.quantity == 0:
+                    
                     self.orderbook['sell'].pop(0)
                     best_sell.executed = True
+
+                #update client order logs
+                buy_client.update_order(best_buy)
+                sell_client.update_order(best_sell)
+
             else:
                 break
+
 
     def print(self):
         max_len = max(len(self.orderbook['buy']), len(self.orderbook['sell']))

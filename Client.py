@@ -6,9 +6,11 @@ class Position:
 
 class Client:
     def __init__(self, client_data):
+        self.username = client_data['username']
         self.client_id = client_data['_id']
         self.balance = client_data['balance']
         self.portfolio = client_data['portfolio']
+        self.orders = {}
 
     def update_portfolio(self, ticker, quantity, price):
         if ticker in self.portfolio:
@@ -19,3 +21,6 @@ class Client:
 
         if self.portfolio[ticker]['quantity'] == 0:
             del self.portfolio[ticker]
+
+    def update_order(self, order):
+        self.orders[order.id] = order

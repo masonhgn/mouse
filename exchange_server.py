@@ -2,6 +2,11 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, f
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from Exchange import Exchange
 from passlib.hash import pbkdf2_sha256
+import threading
+import time
+import signal
+import sys
+
 
 app = Flask(__name__)
 app.secret_key = '1234'
@@ -11,6 +16,18 @@ exchange = Exchange()
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+
+# Register a signal handler for SIGINT (Ctrl+C)
+def handle_shutdown(signal, frame):
+    print("SIGINT, SAVING TO DATABASE")
+    exchange.save_to_db()
+    sys.exit(0)
+
+# Set up the signal handler
+signal.signal(signal.SIGINT, handle_shutdown)
+
 
 
 
@@ -29,11 +46,26 @@ class User(UserMixin):
         self.username = username
 
 
+
+def display_orderbook_passive():
+
+    def printob():
+        while True:
+            orderbook = exchange.orderbooks.get('GOOG')
+            orderbook.print()
+            time.sleep(1)
+    
+    thread = threading.Thread(target=printob)
+    thread.daemon = True  # This makes sure the thread will exit when the main program does
+    thread.start()
+
+display_orderbook_passive()
+
 @login_manager.user_loader
 def load_user(user_id):
-    user_data = exchange.get_client(user_id)
-    if user_data:
-        return User(user_id, user_data['balance'], user_data['username'])
+    client = exchange.get_client(user_id)
+    if client:
+        return User(client.client_id, client.balance, client.username)
     return None
 
 
@@ -43,13 +75,13 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        user_data = exchange.get_client_by_username(username)
+        user_data = exchange.get_user(username)
 
         if user_data and pbkdf2_sha256.verify(password, user_data['password']):
             user = User(str(user_data['_id']), user_data['balance'], username)
             login_user(user)
             flash('Login successful!', 'success')
-            return redirect(url_for('orderbook_page', ticker='AAPL'))
+            return redirect(url_for('order_submission'))
         flash('Invalid username or password', 'danger')
 
     return render_template('login.html')
@@ -78,7 +110,7 @@ def register():
         new_user = User(client_id, balance, username)
         login_user(new_user)
         flash('Registration successful!', 'success')
-        return redirect(url_for('orderbook_page', ticker='AAPL')) 
+        return redirect(url_for('order_submission'))
 
     return render_template('register.html')
 
@@ -167,27 +199,60 @@ def get_order_book(ticker):
     return jsonify({"buy_orders": buy_orders, "sell_orders": sell_orders})
 
 
-@app.route('/orderbook_page/<ticker>', methods=['GET', 'POST'])
+@app.route('/order_submission', methods=['GET', 'POST'])
 @login_required
-def orderbook_page(ticker):
-  
-    if ticker not in exchange.orderbooks:
-        flash(f"Ticker {ticker} not found!", 'danger')
-        return redirect(url_for('home'))  
-
+def order_submission():
     if request.method == 'POST':
-        client_id = current_user.id  
+        client_id = current_user.id
+        ticker = request.form['ticker'].upper()
         side = request.form['side']
         order_type = request.form['type']
         quantity = int(request.form['quantity'])
-
-    
+        
         price = None
         if order_type == 'limit':
             price = float(request.form['price'])
         
+        if ticker not in exchange.orderbooks:
+            flash(f"Ticker {ticker} not found!", 'danger')
+            return redirect(url_for('order_submission'))
+        
         exchange.submit_order(client_id, side, order_type, quantity, ticker, price)
         flash("Order submitted successfully", 'success')
-        return redirect(url_for('orderbook_page', ticker=ticker))
+        return redirect(url_for('order_submission'))
+    
+    open_orders = exchange.get_open_orders(current_user.id)
+    return render_template('order_submission.html', open_orders=open_orders)
 
-    return render_template('orderbook.html', ticker=ticker)
+
+def get_open_orders(self, client_id):
+    open_orders = []
+    for ticker, orderbook in self.orderbooks.items():
+        for order_id in orderbook.orderbook['buy'] + orderbook.orderbook['sell']:
+            order = orderbook.order_lookup[order_id]
+            if order.client_id == client_id and order.filled_quantity < order.quantity:
+                open_orders.append({
+                    'ticker': ticker,
+                    'side': order.side,
+                    'quantity': order.quantity,
+                    'filled_quantity': order.filled_quantity,
+                    'price': order.price
+                })
+    return open_orders
+
+
+@app.route('/open_orders', methods=['GET'])
+@login_required
+def fetch_open_orders():
+    orders, open_orders = exchange.get_open_orders(current_user.id), []
+    for order_id, order in orders.items():
+        open_orders.append({
+                    'ticker': order.ticker,
+                    'side': order.side,
+                    'quantity': order.quantity,
+                    'filled_quantity': order.filled_quantity,
+                    'price': order.price,
+                    'executed': order.executed
+                })
+
+    return jsonify(open_orders)
